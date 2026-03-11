@@ -1,4 +1,6 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
+import hashlib
+import json
 
 app = Flask(__name__)
 
@@ -27,10 +29,6 @@ def require_bearer_token():
 
 
 def get_request_identity():
-    """
-    Demo stateless: "identity" được suy ra từ request hiện tại (token),
-    không phải từ session lưu trên server.
-    """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -38,6 +36,36 @@ def get_request_identity():
     if token != API_TOKEN:
         return None
     return {"sub": "demo-user", "scopes": ["tasks:read", "tasks:write"]}
+
+
+def compute_etag(data) -> str:
+    payload = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def cacheable_json(data, *, max_age_seconds: int = 30):
+    """
+    Demo "cacheable" theo HTTP:
+    - Server trả ETag + Cache-Control
+    - Client có thể gửi If-None-Match để nhận 304 Not Modified
+
+    Lưu ý: có Authorization nên dùng private + Vary: Authorization.
+    """
+    etag = compute_etag(data)
+    inm = (request.headers.get("If-None-Match") or "").strip().strip('"')
+
+    if inm and inm == etag:
+        resp = make_response("", 304)
+        resp.headers["ETag"] = f"\"{etag}\""
+        resp.headers["Cache-Control"] = f"private, max-age={max_age_seconds}"
+        resp.headers["Vary"] = "Authorization"
+        return resp
+
+    resp = make_response(jsonify(data), 200)
+    resp.headers["ETag"] = f"\"{etag}\""
+    resp.headers["Cache-Control"] = f"private, max-age={max_age_seconds}"
+    resp.headers["Vary"] = "Authorization"
+    return resp
 
 
 @app.get("/api/ping")
@@ -57,18 +85,16 @@ def list_tasks():
     if not require_bearer_token():
         return jsonify({"error": "Unauthorized"}), 401
     # Giữ style demo cũ: có thêm "status"
-    return jsonify({"tasks": [task_representation(t) for t in tasks], "status": "success"}), 200
+    body = {"tasks": [task_representation(t) for t in tasks], "status": "success"}
+    return cacheable_json(body, max_age_seconds=30)
 
 
 @app.get("/api/tasks-legacy")
 def list_tasks_legacy():
-    """
-    Endpoint "giữ nguyên demo cũ": trả thẳng list tasks trong bộ nhớ,
-    để bạn so sánh với phiên bản chuẩn hóa representation.
-    """
     if not require_bearer_token():
         return jsonify({"error": "Unauthorized"}), 401
-    return jsonify({"tasks": tasks, "status": "success"}), 200
+    body = {"tasks": tasks, "status": "success"}
+    return cacheable_json(body, max_age_seconds=30)
 
 @app.get("/api/tasks/<int:task_id>")
 def get_task(task_id):
@@ -77,7 +103,8 @@ def get_task(task_id):
     task = next((t for t in tasks if t['id'] == task_id), None)
     if not task:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(task_representation(task)), 200
+    body = task_representation(task)
+    return cacheable_json(body, max_age_seconds=30)
 
 @app.post('/api/tasks')
 def create_task():
@@ -100,7 +127,6 @@ def create_task():
 
 @app.post("/api/add_task")
 def add_task():
-    # Server nhận dữ liệu từ Client nhưng không cần biết Client là ai (stateless)
     if not require_bearer_token():
         return jsonify({"error": "Unauthorized"}), 401
 

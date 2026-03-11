@@ -1,12 +1,19 @@
 import requests
 import time
 
-# Địa chỉ duy nhất để Client tìm thấy Server
 SERVER_URL = "http://127.0.0.1:5000/api/tasks"
 TOKEN = "demo-token"
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
 BASE_URL = "http://127.0.0.1:5000"
+
+def print_cache_headers(resp: requests.Response):
+    etag = resp.headers.get("ETag")
+    cache_control = resp.headers.get("Cache-Control")
+    vary = resp.headers.get("Vary")
+    print("  ETag:", etag)
+    print("  Cache-Control:", cache_control)
+    print("  Vary:", vary)
 
 def call_server():
     print("--- CLIENT: GET /api/ping ---")
@@ -33,13 +40,30 @@ def call_server():
         if response.status_code == 200:
             data = response.json()
             print("SERVER TRẢ VỀ:", data['tasks'])
+            print_cache_headers(response)
         else:
             print("SERVER TRẢ VỀ:", response.status_code, response.text)
     except Exception as e:
         print("Lỗi: Không kết nối được tới Server!", e)
         return
 
-    time.sleep(1) # Nghỉ 1 giây để dễ quan sát
+    time.sleep(1) 
+
+    print("\n--- CLIENT: GET /api/tasks với If-None-Match (kỳ vọng 304 nếu chưa đổi) ---")
+    etag = response.headers.get("ETag")
+    cache_headers = dict(HEADERS)
+    if etag:
+        cache_headers["If-None-Match"] = etag
+
+    r2 = requests.get(SERVER_URL, headers=cache_headers, timeout=5)
+    print("SERVER TRẢ VỀ:", r2.status_code)
+    print_cache_headers(r2)
+    if r2.status_code == 200:
+        print("BODY:", r2.json())
+    else:
+        print("BODY:", r2.text)
+
+    time.sleep(1)
 
     print("\n--- CLIENT: POST /api/tasks ---")
     new_data = {"title": "Học về Uniform Interface"}
@@ -49,6 +73,15 @@ def call_server():
         print("SERVER XÁC NHẬN ĐÃ THÊM:", post_response.json())
     else:
         print("SERVER TRẢ VỀ:", post_response.status_code, post_response.text)
+
+    time.sleep(1)
+
+    print("\n--- CLIENT: GET /api/tasks lại với ETag cũ (kỳ vọng 200 + ETag mới) ---")
+    r3 = requests.get(SERVER_URL, headers=cache_headers, timeout=5)
+    print("SERVER TRẢ VỀ:", r3.status_code)
+    print_cache_headers(r3)
+    if r3.status_code == 200:
+        print("TASKS:", r3.json().get("tasks"))
 
 if __name__ == "__main__":
     call_server()
