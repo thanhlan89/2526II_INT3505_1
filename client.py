@@ -1,7 +1,7 @@
 import requests
 import time
 
-SERVER_URL = "http://127.0.0.1:5000/api/v1/tasks"
+SERVER_URL = "http://127.0.0.1:5000/api/tasks"
 TOKEN = "demo-token"
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
@@ -34,13 +34,12 @@ def call_server():
 
     time.sleep(1)
 
-    print("--- CLIENT: GET /api/v1/tasks (plural + lowercase + versioning) ---")
+    print("--- CLIENT: GET /api/tasks (stateless qua Authorization header) ---")
     try:
         response = requests.get(SERVER_URL, headers=HEADERS, timeout=5)
         if response.status_code == 200:
             data = response.json()
             print("SERVER TRẢ VỀ:", data['tasks'])
-            print("META:", data.get("meta"))
             print_cache_headers(response)
         else:
             print("SERVER TRẢ VỀ:", response.status_code, response.text)
@@ -49,21 +48,6 @@ def call_server():
         return
 
     time.sleep(1) 
-
-    print("\n--- CLIENT: GET /api/v1/tasks?done=false&sort=title&order=asc&limit=1&offset=0 (clarity + extensibility) ---")
-    r_query = requests.get(
-        SERVER_URL,
-        params={"done": "false", "sort": "title", "order": "asc", "limit": 1, "offset": 0},
-        headers=HEADERS,
-        timeout=5,
-    )
-    print("SERVER TRẢ VỀ:", r_query.status_code)
-    if r_query.status_code == 200:
-        print("TASKS:", r_query.json().get("tasks"))
-        print("META:", r_query.json().get("meta"))
-        print_cache_headers(r_query)
-    else:
-        print("BODY:", r_query.text)
 
     print("\n--- CLIENT: GET /api/tasks với If-None-Match (kỳ vọng 304 nếu chưa đổi) ---")
     etag = response.headers.get("ETag")
