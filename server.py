@@ -80,6 +80,109 @@ def me():
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify({"me": ident}), 200
 
+
+# -----------------------------
+# API versioning demo (v1)
+# Naming conventions:
+# - plural nouns: /tasks
+# - lowercase: /api/v1/...
+# - hyphens: /task-items (ví dụ)
+# -----------------------------
+
+@app.get("/api/v1/tasks")
+def v1_list_tasks():
+    """
+    Demo consistency/clarity/extensibility:
+    - Resource plural: /tasks
+    - Query params rõ ràng: done, q, sort, order, limit, offset
+    - Response giữ key "tasks" để tương thích, thêm "meta" để dễ mở rộng
+    """
+    if not require_bearer_token():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    items = [task_representation(t) for t in tasks]
+
+    # Filtering (clarity): done=true/false
+    done = request.args.get("done")
+    if done is not None:
+        done_norm = done.strip().lower()
+        if done_norm not in ("true", "false"):
+            return jsonify({"error": "Invalid query: done must be true/false"}), 400
+        want = done_norm == "true"
+        items = [t for t in items if t["done"] is want]
+
+    # Search (extensibility): q=keyword
+    q = request.args.get("q")
+    if q:
+        qn = q.strip().lower()
+        items = [t for t in items if qn in t["title"].lower()]
+
+    # Sorting (consistency): sort=id|title, order=asc|desc
+    sort = (request.args.get("sort") or "id").strip().lower()
+    order = (request.args.get("order") or "asc").strip().lower()
+    if sort not in ("id", "title"):
+        return jsonify({"error": "Invalid query: sort must be id/title"}), 400
+    if order not in ("asc", "desc"):
+        return jsonify({"error": "Invalid query: order must be asc/desc"}), 400
+    items.sort(key=lambda t: t[sort])
+    if order == "desc":
+        items.reverse()
+
+    # Pagination (extensibility): limit/offset
+    try:
+        limit = int(request.args.get("limit") or 50)
+        offset = int(request.args.get("offset") or 0)
+    except ValueError:
+        return jsonify({"error": "Invalid query: limit/offset must be integers"}), 400
+    if limit < 0 or offset < 0:
+        return jsonify({"error": "Invalid query: limit/offset must be >= 0"}), 400
+
+    total = len(items)
+    paged = items[offset: offset + limit]
+
+    body = {
+        "tasks": paged,
+        "status": "success",
+        "meta": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "sort": sort,
+            "order": order,
+            "done": done,
+            "q": q,
+            "version": "v1",
+        },
+    }
+    return cacheable_json(body, max_age_seconds=30)
+
+
+@app.post("/api/v1/tasks")
+def v1_create_task():
+    return create_task()
+
+
+@app.get("/api/v1/tasks/<int:task_id>")
+def v1_get_task(task_id):
+    return get_task(task_id)
+
+
+@app.put("/api/v1/tasks/<int:task_id>")
+def v1_update_task(task_id):
+    return update_task(task_id)
+
+
+@app.delete("/api/v1/tasks/<int:task_id>")
+def v1_delete_task(task_id):
+    return delete_task(task_id)
+
+
+@app.get("/api/v1/task-items")
+def v1_task_items_alias():
+    # Demo hyphen: alias cho /tasks (không khuyến khích có 2 đường dẫn thật trong hệ thống lớn,
+    # nhưng dùng để minh họa naming convention)
+    return v1_list_tasks()
+
 @app.get('/api/tasks')
 def list_tasks():
     if not require_bearer_token():
