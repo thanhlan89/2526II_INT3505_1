@@ -1,0 +1,28 @@
+FORMAT: 1A
+
+# Library Management API
+
+## Books Collection [/books]
+
+### Lấy danh sách sách [GET]
+
++ Response 200 (application/json)
+
+        [
+            {
+                "id": "1",
+                "title": "Clean Code",
+                "author": "Robert C. Martin"
+            }
+        ]
+
+### Thêm sách mới [POST]
+
++ Request (application/json)
+
+        {
+            "title": "The Pragmatic Programmer",
+            "author": "Andrew Hunt"
+        }
+
++ Response 201 (application/json)
