@@ -1,0 +1,253 @@
+openapi: 3.0.3
+info:
+  title: Demo Tasks API
+  version: "1.0.0"
+  description: |
+    API demo đơn giản (5 endpoints) để minh hoạ:
+    - Naming conventions: plural nouns, lowercase, hyphens, versioning
+    - Stateless: Bearer token trong header Authorization
+    - Cacheable: ETag + If-None-Match (304 Not Modified)
+
+servers:
+  - url: /
+
+tags:
+  - name: System
+  - name: Tasks
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Demo token tĩnh: `demo-token`.
+        Gửi header: `Authorization: Bearer demo-token`
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Ping:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 1
+        title:
+          type: string
+          example: Học REST basics
+        done:
+          type: boolean
+          example: false
+      required: [id, title, done]
+    StatusSuccess:
+      type: string
+      example: success
+    TaskListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [tasks, status]
+    TaskResponse:
+      type: object
+      properties:
+        task:
+          $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [task, status]
+    CreateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Làm OpenAPI spec
+      required: [title]
+
+paths:
+  /api/ping:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ping"
+
+  /api/v1/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks (plural nouns + versioning)
+      description: |
+        Cacheable:
+        - Response có `ETag`
+        - Request có thể gửi `If-None-Match` để nhận `304 Not Modified`
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: ETag từ lần gọi trước (để nhận 304)
+      responses:
+        "200":
+          description: Danh sách tasks
+          headers:
+            ETag:
+              description: Entity tag của response body
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache directive (private + max-age)
+              schema:
+                type: string
+            Vary:
+              description: Cache key thay đổi theo Authorization
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "304":
+          description: Not Modified (nội dung không đổi)
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/{task_id}:
+    get:
+      tags: [Tasks]
+      summary: Get a task by id
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: integer
+            format: int32
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "304":
+          description: Not Modified
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/task-items:
+    get:
+      tags: [Tasks]
+      summary: Alias (hyphens) for listing tasks
+      description: |
+        Demo naming với hyphen. Endpoint này trả cùng response như `GET /api/v1/tasks`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
