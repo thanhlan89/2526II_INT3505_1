@@ -72,6 +72,38 @@ components:
         status:
           $ref: "#/components/schemas/StatusSuccess"
       required: [task, status]
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          example: 1
+        page_size:
+          type: integer
+          format: int32
+          example: 10
+        total_items:
+          type: integer
+          format: int32
+          example: 25
+        total_pages:
+          type: integer
+          format: int32
+          example: 3
+      required: [page, page_size, total_items, total_pages]
+    TaskSearchListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [tasks, status, meta]
     CreateTaskRequest:
       type: object
       properties:
@@ -244,6 +276,114 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaskListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/search:
+    get:
+      tags: [Tasks]
+      summary: Search tasks with pagination
+      description: |
+        Endpoint tìm kiếm task (theo `q`, `done`) và trả kết quả theo trang.
+
+        Cacheable:
+        - Response có `ETag`
+        - Gửi header `If-None-Match` để nhận `304 Not Modified`
+        - Nên đưa query params vào key để tránh trộn kết quả khác nhau (implementation-specific)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: ETag từ lần gọi trước (để nhận 304)
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+          description: Từ khoá tìm theo `title` (tùy implementation: case-insensitive/partial match)
+        - in: query
+          name: done
+          required: false
+          schema:
+            type: boolean
+          description: Lọc theo trạng thái hoàn thành
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 10
+        - in: query
+          name: sort_by
+          required: false
+          schema:
+            type: string
+            enum: [id, title, done]
+            default: title
+        - in: query
+          name: sort_order
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: Search results
+          headers:
+            ETag:
+              description: Entity tag của response body
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache directive (private + max-age)
+              schema:
+                type: string
+            Vary:
+              description: Cache key thay đổi theo Authorization và các query params
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSearchListResponse"
+        "304":
+          description: Not Modified (nội dung không đổi)
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           description: Unauthorized
           content:
