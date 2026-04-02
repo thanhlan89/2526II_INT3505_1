@@ -92,6 +92,46 @@ components:
           format: int32
           example: 3
       required: [page, page_size, total_items, total_pages]
+    OffsetLimitMeta:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          example: 0
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          example: 10
+        returned:
+          type: integer
+          format: int32
+          example: 10
+        total_items:
+          type: integer
+          format: int32
+          example: 25
+      required: [offset, limit, returned, total_items]
+    CursorMeta:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+          example: "eyJpZCI6MTB9"
+        has_more:
+          type: boolean
+          example: true
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          example: 10
+      required: [next_cursor, has_more, limit]
     TaskSearchListResponse:
       type: object
       properties:
@@ -103,6 +143,30 @@ components:
           $ref: "#/components/schemas/StatusSuccess"
         meta:
           $ref: "#/components/schemas/PaginationMeta"
+      required: [tasks, status, meta]
+    TaskOffsetListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/OffsetLimitMeta"
+      required: [tasks, status, meta]
+    TaskCursorListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/CursorMeta"
       required: [tasks, status, meta]
     CreateTaskRequest:
       type: object
@@ -378,6 +442,150 @@ paths:
             Vary:
               schema:
                 type: string
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/page-based:
+    get:
+      tags: [Tasks]
+      summary: Demo page-based pagination
+      description: |
+        Phân trang theo số trang:
+        - Dùng `page` (bắt đầu từ 1)
+        - Dùng `page_size` để giới hạn số phần tử mỗi trang
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Page-based results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSearchListResponse"
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/offset-limit:
+    get:
+      tags: [Tasks]
+      summary: Demo offset/limit pagination
+      description: |
+        Phân trang theo vị trí:
+        - `offset`: vị trí bắt đầu (0-based)
+        - `limit`: số phần tử cần lấy
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Offset/limit results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskOffsetListResponse"
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/cursor:
+    get:
+      tags: [Tasks]
+      summary: Demo cursor pagination
+      description: |
+        Phân trang theo con trỏ:
+        - `cursor`: token từ lần gọi trước (`meta.next_cursor`)
+        - `limit`: số phần tử cần lấy
+        Cursor phù hợp khi dữ liệu thay đổi liên tục, tránh lệch trang.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
+            nullable: true
+          description: Token cho trang tiếp theo
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Cursor results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCursorListResponse"
         "400":
           description: Bad Request (param không hợp lệ)
           content:
