@@ -14,6 +14,8 @@ servers:
 tags:
   - name: System
   - name: Tasks
+  - name: Auth
+  - name: Admin
 
 components:
   securitySchemes:
@@ -24,6 +26,20 @@ components:
       description: |
         Demo token tĩnh: `demo-token`.
         Gửi header: `Authorization: Bearer demo-token`
+    oauth2Auth:
+      type: oauth2
+      description: |
+        OAuth2 demo:
+        - Access token gửi qua `Authorization: Bearer <token>`
+        - Refresh token dùng ở endpoint `/api/v1/auth/refresh`
+      flows:
+        password:
+          tokenUrl: /api/v1/auth/login
+          refreshUrl: /api/v1/auth/refresh
+          scopes:
+            tasks:read: Đọc danh sách task
+            tasks:write: Tạo/cập nhật task
+            admin:read: Đọc dữ liệu quản trị
   schemas:
     Error:
       type: object
@@ -31,6 +47,103 @@ components:
         error:
           type: string
       required: [error]
+    Role:
+      type: string
+      enum: [user, admin]
+      example: user
+    ScopeList:
+      type: array
+      items:
+        type: string
+      example: [tasks:read, tasks:write]
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          format: int32
+          example: 101
+        email:
+          type: string
+          format: email
+          example: demo@example.com
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        scopes:
+          $ref: "#/components/schemas/ScopeList"
+      required: [user_id, email, roles, scopes]
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          example: demo@example.com
+        password:
+          type: string
+          format: password
+          example: secret123
+        requested_scopes:
+          $ref: "#/components/schemas/ScopeList"
+      required: [username, password]
+    TokenPairResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo.access
+        refresh_token:
+          type: string
+          example: rt_demo_9f7e50
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          format: int32
+          example: 3600
+        scope:
+          type: string
+          example: tasks:read tasks:write
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+      required: [access_token, refresh_token, token_type, expires_in, scope, roles]
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          example: rt_demo_9f7e50
+      required: [refresh_token]
+    MeResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [user, status]
+    AdminReportResponse:
+      type: object
+      properties:
+        report:
+          type: object
+          properties:
+            active_users:
+              type: integer
+              format: int32
+              example: 120
+            completed_tasks:
+              type: integer
+              format: int32
+              example: 580
+          required: [active_users, completed_tasks]
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [report, status]
     Ping:
       type: object
       properties:
@@ -177,6 +290,123 @@ components:
       required: [title]
 
 paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and issue bearer tokens
+      description: |
+        Demo endpoint phát hành access token + refresh token.
+        Access token chứa claims về `scopes` và `roles`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sai thông tin đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: |
+        Đổi refresh token lấy access token mới (có thể trả refresh token mới).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: Refresh thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Refresh token không hợp lệ/hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info (roles + scopes)
+      security:
+        - oauth2Auth:
+            - tasks:read
+      responses:
+        "200":
+          description: Thông tin user hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/admin/reports:
+    get:
+      tags: [Admin]
+      summary: Admin-only report
+      description: |
+        Demo RBAC:
+        - Cần scope `admin:read`
+        - Và role `admin` (kiểm tra ở backend logic)
+      security:
+        - oauth2Auth:
+            - admin:read
+      responses:
+        "200":
+          description: Admin report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReportResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden (không đủ role/scope)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/ping:
     get:
       tags: [System]
@@ -197,7 +427,11 @@ paths:
         Cacheable:
         - Response có `ETag`
         - Request có thể gửi `If-None-Match` để nhận `304 Not Modified`
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: header
@@ -247,7 +481,12 @@ paths:
     post:
       tags: [Tasks]
       summary: Create a task
+      description: |
+        Authorization:
+        - Với OAuth2: cần scope `tasks:write`
       security:
+        - oauth2Auth:
+            - tasks:write
         - bearerAuth: []
       requestBody:
         required: true
@@ -279,7 +518,12 @@ paths:
     get:
       tags: [Tasks]
       summary: Get a task by id
+      description: |
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: path
@@ -331,7 +575,11 @@ paths:
       summary: Alias (hyphens) for listing tasks
       description: |
         Demo naming với hyphen. Endpoint này trả cùng response như `GET /api/v1/tasks`.
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       responses:
         "200":
@@ -358,7 +606,11 @@ paths:
         - Response có `ETag`
         - Gửi header `If-None-Match` để nhận `304 Not Modified`
         - Nên đưa query params vào key để tránh trộn kết quả khác nhau (implementation-specific)
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: header
@@ -463,7 +715,11 @@ paths:
         Phân trang theo số trang:
         - Dùng `page` (bắt đầu từ 1)
         - Dùng `page_size` để giới hạn số phần tử mỗi trang
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: query
@@ -511,7 +767,11 @@ paths:
         Phân trang theo vị trí:
         - `offset`: vị trí bắt đầu (0-based)
         - `limit`: số phần tử cần lấy
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: query
@@ -560,7 +820,11 @@ paths:
         - `cursor`: token từ lần gọi trước (`meta.next_cursor`)
         - `limit`: số phần tử cần lấy
         Cursor phù hợp khi dữ liệu thay đổi liên tục, tránh lệch trang.
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
       security:
+        - oauth2Auth:
+            - tasks:read
         - bearerAuth: []
       parameters:
         - in: query
