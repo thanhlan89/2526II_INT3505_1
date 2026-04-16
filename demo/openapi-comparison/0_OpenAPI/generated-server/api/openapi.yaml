@@ -1,0 +1,52 @@
+openapi: 3.0.3
+info:
+  title: Library Management API
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /books:
+    get:
+      operationId: booksGET
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Book"
+                type: array
+          description: Thành công
+      summary: Lấy danh sách sách
+      x-eov-operation-handler: controllers/DefaultController
+    post:
+      operationId: booksPOST
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Book"
+        required: true
+      responses:
+        "201":
+          description: Đã tạo
+      summary: Thêm sách mới
+      x-eov-operation-handler: controllers/DefaultController
+components:
+  schemas:
+    Book:
+      example:
+        author: author
+        id: id
+        title: title
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+      required:
+      - author
+      - title
+      type: object

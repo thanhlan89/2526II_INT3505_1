@@ -1,0 +1,27 @@
+#%RAML 1.0
+title: Library Management API
+version: v1
+mediaType: application/json
+
+types:
+  Book:
+    type: object
+    properties:
+      id?: string
+      title: string
+      author: string
+
+/books:
+  get:
+    description: Lấy danh sách sách
+    responses:
+      200:
+        body:
+          type: Book[]
+  post:
+    description: Thêm sách mới
+    body:
+      type: Book
+    responses:
+      201:
+        description: Đã tạo thành công
