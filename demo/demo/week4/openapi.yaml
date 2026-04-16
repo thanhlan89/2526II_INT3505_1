@@ -1,0 +1,865 @@
+openapi: 3.0.3
+info:
+  title: Demo Tasks API
+  version: "1.0.0"
+  description: |
+    API demo đơn giản (5 endpoints) để minh hoạ:
+    - Naming conventions: plural nouns, lowercase, hyphens, versioning
+    - Stateless: Bearer token trong header Authorization
+    - Cacheable: ETag + If-None-Match (304 Not Modified)
+
+servers:
+  - url: /
+
+tags:
+  - name: System
+  - name: Tasks
+  - name: Auth
+  - name: Admin
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Demo token tĩnh: `demo-token`.
+        Gửi header: `Authorization: Bearer demo-token`
+    oauth2Auth:
+      type: oauth2
+      description: |
+        OAuth2 demo:
+        - Access token gửi qua `Authorization: Bearer <token>`
+        - Refresh token dùng ở endpoint `/api/v1/auth/refresh`
+      flows:
+        password:
+          tokenUrl: /api/v1/auth/login
+          refreshUrl: /api/v1/auth/refresh
+          scopes:
+            tasks:read: Đọc danh sách task
+            tasks:write: Tạo/cập nhật task
+            admin:read: Đọc dữ liệu quản trị
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Role:
+      type: string
+      enum: [user, admin]
+      example: user
+    ScopeList:
+      type: array
+      items:
+        type: string
+      example: [tasks:read, tasks:write]
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          format: int32
+          example: 101
+        email:
+          type: string
+          format: email
+          example: demo@example.com
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        scopes:
+          $ref: "#/components/schemas/ScopeList"
+      required: [user_id, email, roles, scopes]
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          example: demo@example.com
+        password:
+          type: string
+          format: password
+          example: secret123
+        requested_scopes:
+          $ref: "#/components/schemas/ScopeList"
+      required: [username, password]
+    TokenPairResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo.access
+        refresh_token:
+          type: string
+          example: rt_demo_9f7e50
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          format: int32
+          example: 3600
+        scope:
+          type: string
+          example: tasks:read tasks:write
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+      required: [access_token, refresh_token, token_type, expires_in, scope, roles]
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          example: rt_demo_9f7e50
+      required: [refresh_token]
+    MeResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [user, status]
+    AdminReportResponse:
+      type: object
+      properties:
+        report:
+          type: object
+          properties:
+            active_users:
+              type: integer
+              format: int32
+              example: 120
+            completed_tasks:
+              type: integer
+              format: int32
+              example: 580
+          required: [active_users, completed_tasks]
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [report, status]
+    Ping:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 1
+        title:
+          type: string
+          example: Học REST basics
+        done:
+          type: boolean
+          example: false
+      required: [id, title, done]
+    StatusSuccess:
+      type: string
+      example: success
+    TaskListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [tasks, status]
+    TaskResponse:
+      type: object
+      properties:
+        task:
+          $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+      required: [task, status]
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          example: 1
+        page_size:
+          type: integer
+          format: int32
+          example: 10
+        total_items:
+          type: integer
+          format: int32
+          example: 25
+        total_pages:
+          type: integer
+          format: int32
+          example: 3
+      required: [page, page_size, total_items, total_pages]
+    OffsetLimitMeta:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          example: 0
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          example: 10
+        returned:
+          type: integer
+          format: int32
+          example: 10
+        total_items:
+          type: integer
+          format: int32
+          example: 25
+      required: [offset, limit, returned, total_items]
+    CursorMeta:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+          example: "eyJpZCI6MTB9"
+        has_more:
+          type: boolean
+          example: true
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          example: 10
+      required: [next_cursor, has_more, limit]
+    TaskSearchListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+      required: [tasks, status, meta]
+    TaskOffsetListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/OffsetLimitMeta"
+      required: [tasks, status, meta]
+    TaskCursorListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        meta:
+          $ref: "#/components/schemas/CursorMeta"
+      required: [tasks, status, meta]
+    CreateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Làm OpenAPI spec
+      required: [title]
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and issue bearer tokens
+      description: |
+        Demo endpoint phát hành access token + refresh token.
+        Access token chứa claims về `scopes` và `roles`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sai thông tin đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: |
+        Đổi refresh token lấy access token mới (có thể trả refresh token mới).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: Refresh thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Refresh token không hợp lệ/hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info (roles + scopes)
+      security:
+        - oauth2Auth:
+            - tasks:read
+      responses:
+        "200":
+          description: Thông tin user hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/admin/reports:
+    get:
+      tags: [Admin]
+      summary: Admin-only report
+      description: |
+        Demo RBAC:
+        - Cần scope `admin:read`
+        - Và role `admin` (kiểm tra ở backend logic)
+      security:
+        - oauth2Auth:
+            - admin:read
+      responses:
+        "200":
+          description: Admin report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReportResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden (không đủ role/scope)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/ping:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ping"
+
+  /api/v1/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks (plural nouns + versioning)
+      description: |
+        Cacheable:
+        - Response có `ETag`
+        - Request có thể gửi `If-None-Match` để nhận `304 Not Modified`
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: ETag từ lần gọi trước (để nhận 304)
+      responses:
+        "200":
+          description: Danh sách tasks
+          headers:
+            ETag:
+              description: Entity tag của response body
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache directive (private + max-age)
+              schema:
+                type: string
+            Vary:
+              description: Cache key thay đổi theo Authorization
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "304":
+          description: Not Modified (nội dung không đổi)
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      description: |
+        Authorization:
+        - Với OAuth2: cần scope `tasks:write`
+      security:
+        - oauth2Auth:
+            - tasks:write
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/{task_id}:
+    get:
+      tags: [Tasks]
+      summary: Get a task by id
+      description: |
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: integer
+            format: int32
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "304":
+          description: Not Modified
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/task-items:
+    get:
+      tags: [Tasks]
+      summary: Alias (hyphens) for listing tasks
+      description: |
+        Demo naming với hyphen. Endpoint này trả cùng response như `GET /api/v1/tasks`.
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/search:
+    get:
+      tags: [Tasks]
+      summary: Search tasks with pagination
+      description: |
+        Endpoint tìm kiếm task (theo `q`, `done`) và trả kết quả theo trang.
+
+        Cacheable:
+        - Response có `ETag`
+        - Gửi header `If-None-Match` để nhận `304 Not Modified`
+        - Nên đưa query params vào key để tránh trộn kết quả khác nhau (implementation-specific)
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+          description: ETag từ lần gọi trước (để nhận 304)
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+          description: Từ khoá tìm theo `title` (tùy implementation: case-insensitive/partial match)
+        - in: query
+          name: done
+          required: false
+          schema:
+            type: boolean
+          description: Lọc theo trạng thái hoàn thành
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 10
+        - in: query
+          name: sort_by
+          required: false
+          schema:
+            type: string
+            enum: [id, title, done]
+            default: title
+        - in: query
+          name: sort_order
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: Search results
+          headers:
+            ETag:
+              description: Entity tag của response body
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache directive (private + max-age)
+              schema:
+                type: string
+            Vary:
+              description: Cache key thay đổi theo Authorization và các query params
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSearchListResponse"
+        "304":
+          description: Not Modified (nội dung không đổi)
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/page-based:
+    get:
+      tags: [Tasks]
+      summary: Demo page-based pagination
+      description: |
+        Phân trang theo số trang:
+        - Dùng `page` (bắt đầu từ 1)
+        - Dùng `page_size` để giới hạn số phần tử mỗi trang
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Page-based results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSearchListResponse"
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/offset-limit:
+    get:
+      tags: [Tasks]
+      summary: Demo offset/limit pagination
+      description: |
+        Phân trang theo vị trí:
+        - `offset`: vị trí bắt đầu (0-based)
+        - `limit`: số phần tử cần lấy
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Offset/limit results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskOffsetListResponse"
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/tasks/cursor:
+    get:
+      tags: [Tasks]
+      summary: Demo cursor pagination
+      description: |
+        Phân trang theo con trỏ:
+        - `cursor`: token từ lần gọi trước (`meta.next_cursor`)
+        - `limit`: số phần tử cần lấy
+        Cursor phù hợp khi dữ liệu thay đổi liên tục, tránh lệch trang.
+        Authorization:
+        - Với OAuth2: cần scope `tasks:read`
+      security:
+        - oauth2Auth:
+            - tasks:read
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
+            nullable: true
+          description: Token cho trang tiếp theo
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Cursor results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCursorListResponse"
+        "400":
+          description: Bad Request (param không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
