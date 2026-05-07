@@ -288,8 +288,110 @@ components:
           type: string
           example: Làm OpenAPI spec
       required: [title]
+    UserV1:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 1
+        name:
+          type: string
+          example: Alice
+      required: [id, name]
+    UserV2:
+      type: object
+      properties:
+        id:
+          type: string
+          example: usr_1
+        full_name:
+          type: string
+          example: Alice
+        status:
+          type: string
+          example: active
+      required: [id, full_name, status]
+    UserListV1Response:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserV1"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        api_version:
+          type: string
+          example: v1
+      required: [users, status, api_version]
+    UserListV2Meta:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int32
+          example: 2
+      required: [count]
+    UserListV2Response:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserV2"
+        status:
+          $ref: "#/components/schemas/StatusSuccess"
+        api_version:
+          type: string
+          example: v2
+        meta:
+          $ref: "#/components/schemas/UserListV2Meta"
+      required: [users, status, api_version, meta]
 
 paths:
+  /api/v1/users:
+    get:
+      tags: [Auth]
+      summary: List users (deprecated)
+      description: |
+        Endpoint v1 đã bị deprecate. Vui lòng chuyển sang `/api/v2/users`.
+      responses:
+        "200":
+          description: Danh sách user (v1)
+          headers:
+            Deprecation:
+              description: API version v1 is deprecated
+              schema:
+                type: string
+                example: "true"
+            Sunset:
+              description: Deadline ngừng hỗ trợ v1 (RFC 7231 date-time)
+              schema:
+                type: string
+                example: Wed, 31 Dec 2026 23:59:59 GMT
+            Link:
+              description: URL tài liệu migration
+              schema:
+                type: string
+                example: </docs/migration-api-v2>; rel="deprecation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListV1Response"
+
+  /api/v2/users:
+    get:
+      tags: [Auth]
+      summary: List users (v2)
+      responses:
+        "200":
+          description: Danh sách user (v2)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListV2Response"
+
   /api/v1/auth/login:
     post:
       tags: [Auth]

@@ -40,3 +40,37 @@ def test_docs_returns_swagger_ui_html(client):
     assert response.mimetype == "text/html"
     assert "SwaggerUIBundle" in html
     assert 'url: "/openapi.yaml"' in html
+
+
+def test_v1_users_returns_deprecation_headers(client):
+    response = client.get("/api/v1/users")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["api_version"] == "v1"
+    assert payload["status"] == "success"
+    assert isinstance(payload["users"], list)
+    assert response.headers["Deprecation"] == "true"
+    assert "Sunset" in response.headers
+    assert 'rel="deprecation"' in response.headers["Link"]
+
+
+def test_v2_users_returns_new_contract(client):
+    response = client.get("/api/v2/users")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["api_version"] == "v2"
+    assert payload["status"] == "success"
+    assert "meta" in payload
+    assert payload["meta"]["count"] == len(payload["users"])
+    assert "full_name" in payload["users"][0]
+
+
+def test_migration_doc_is_available(client):
+    response = client.get("/docs/migration-api-v2")
+    content = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/markdown"
+    assert "API v1 to v2 migration" in content

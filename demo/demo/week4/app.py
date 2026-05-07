@@ -2,17 +2,54 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, Response, redirect
+from flask import Flask, Response, jsonify, redirect
 
 APP_DIR = Path(__file__).resolve().parent
 OPENAPI_PATH = APP_DIR / "openapi.yaml"
+MIGRATION_DOC_URL = "/docs/migration-api-v2"
+SUNSET_DATE = "Wed, 31 Dec 2026 23:59:59 GMT"
+
+V1_USERS = [
+    {"id": 1, "name": "Alice"},
+    {"id": 2, "name": "Bob"},
+]
+
+V2_USERS = [
+    {"id": "usr_1", "full_name": "Alice", "status": "active"},
+    {"id": "usr_2", "full_name": "Bob", "status": "active"},
+]
 
 app = Flask(__name__)
+
+
+def add_v1_deprecation_headers(response: Response) -> Response:
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = SUNSET_DATE
+    response.headers["Link"] = f'<{MIGRATION_DOC_URL}>; rel="deprecation"'
+    return response
 
 
 @app.get("/")
 def root():
     return redirect("/docs", code=302)
+
+
+@app.get("/api/v1/users")
+def list_users_v1():
+    response = jsonify({"users": V1_USERS, "status": "success", "api_version": "v1"})
+    return add_v1_deprecation_headers(response)
+
+
+@app.get("/api/v2/users")
+def list_users_v2():
+    return jsonify(
+        {
+            "users": V2_USERS,
+            "status": "success",
+            "api_version": "v2",
+            "meta": {"count": len(V2_USERS)},
+        }
+    )
 
 
 @app.get("/openapi.yaml")
@@ -51,6 +88,24 @@ def swagger_ui():
   </body>
 </html>"""
     return Response(html, mimetype="text/html")
+
+
+@app.get("/docs/migration-api-v2")
+def migration_api_v2():
+    markdown = """# API v1 to v2 migration
+
+- Base path mới: `/api/v2`
+- Endpoint mới: `GET /api/v2/users`
+- Các thay đổi chính:
+  - `name` -> `full_name`
+  - `id` kiểu số -> chuỗi định danh (`usr_*`)
+  - Bổ sung `status` và `meta.count`
+
+## Deadline
+
+`/api/v1/users` sẽ sunset vào: Wed, 31 Dec 2026 23:59:59 GMT
+"""
+    return Response(markdown, mimetype="text/markdown")
 
 
 if __name__ == "__main__":
