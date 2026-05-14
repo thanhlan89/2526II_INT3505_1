@@ -14,6 +14,8 @@ class Settings:
     app_version: str
     mongo_uri: str | None
     mongo_db_name: str
+    log_level: str
+    log_json: bool
 
 
 def load_settings() -> Settings:
@@ -32,6 +34,13 @@ def load_settings() -> Settings:
     if mongo_uri is not None:
         mongo_uri = mongo_uri.strip() or None
 
+    log_level = (os.getenv("LOG_LEVEL") or "INFO").strip().upper()
+    log_json_raw = os.getenv("LOG_JSON")
+    if log_json_raw is not None:
+        log_json = log_json_raw.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        log_json = app_env == "production"
+
     return Settings(
         app_env=app_env,
         port=int(os.getenv("PORT", "5000")),
@@ -39,4 +48,6 @@ def load_settings() -> Settings:
         app_version=(os.getenv("APP_VERSION") or "0.1.0").strip(),
         mongo_uri=mongo_uri,
         mongo_db_name=(os.getenv("MONGO_DB_NAME") or "demo_db").strip(),
+        log_level=log_level,
+        log_json=log_json,
     )
