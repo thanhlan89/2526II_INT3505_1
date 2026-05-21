@@ -51,7 +51,38 @@ Ví dụ endpoints
 - `POST /webhooks/register` — register a webhook `{ url }`.
 - `GET /webhooks` — list registered webhooks.
 - `POST /webhooks/test` — send a test payload to registered webhooks.
+ - `POST /webhooks/test` — send a test payload to registered webhooks.
 
+HMAC signature (bảo mật webhook)
+- Ví dụ trong repo sử dụng HMAC-SHA256 để chứng thực nguồn webhook. Thiết lập biến môi trường `WEBHOOK_SECRET` cho cả `webhook-server` và `webhook-client` để chia sẻ secret.
+
+Ví dụ chạy với HMAC
+1. Mở terminal, chạy webhook receiver (port 4000):
+```bash
+cd week11/webhook-server
+# Linux/macOS
+export WEBHOOK_SECRET=mysecret
+# Windows PowerShell
+$env:WEBHOOK_SECRET="mysecret"
+npm install
+node index.js
+```
+2. Mở terminal khác, chạy API server (port 4100) và đăng ký webhook:
+```bash
+cd week11/api-server
+# Linux/macOS
+export WEBHOOK_SECRET=mysecret
+# Windows PowerShell
+$env:WEBHOOK_SECRET="mysecret"
+npm install
+node index.js
+
+# Register the webhook so API server will deliver events to receiver
+curl -X POST http://localhost:4100/webhooks/register -H "Content-Type: application/json" -d '{"url":"http://localhost:4000/webhook"}'
+
+# Create item to trigger event delivery
+curl -X POST http://localhost:4100/items -H "Content-Type: application/json" -d '{"name":"Example","price":9.99}'
+```
 
 Chạy ví dụ
 1. Mở terminal, chạy server:

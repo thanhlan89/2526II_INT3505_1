@@ -15,12 +15,32 @@ let webhooks = []; // { id, url }
 const bus = new EventEmitter();
 
 // Event-driven handler: deliver events to registered webhooks
-bus.on('item.created', async (item) => {
+async function deliverWithRetry(url, payload, attempts = 3) {
+  let attempt = 0;
+  while (attempt < attempts) {
+    try {
+      const r = await axios.post(url, payload, { timeout: 5000 });
+      console.log(`Delivered to ${url}: ${r.status}`);
+      return { success: true, status: r.status };
+    } catch (e) {
+      attempt++;
+      const wait = 500 * Math.pow(2, attempt - 1);
+      console.warn(`Deliver attempt ${attempt} to ${url} failed: ${e.message}`);
+      if (attempt >= attempts) {
+        console.error(`Failed to deliver to ${url} after ${attempt} attempts`);
+        return { success: false, error: e.message };
+      }
+      // exponential backoff
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+}
+
+bus.on('item.created', (item) => {
   const payload = { event: 'item.created', timestamp: Date.now(), item };
   for (const wh of webhooks) {
-    axios.post(wh.url, payload, { timeout: 5000 })
-      .then(res => console.log(`Delivered to ${wh.url}: ${res.status}`))
-      .catch(err => console.error(`Deliver failed to ${wh.url}: ${err.message}`));
+    // fire-and-forget delivery with retries
+    deliverWithRetry(wh.url, payload, 3).catch(e => console.error('Unexpected delivery error', e));
   }
 });
 
