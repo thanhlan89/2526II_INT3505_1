@@ -51,3 +51,11 @@ def load_settings() -> Settings:
         log_level=log_level,
         log_json=log_json,
     )
+    import os
+
+class Config:
+    APP_ENV = os.environ.get('APP_ENV', 'development')
+    PORT = int(os.environ.get('PORT', 5000))
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+    # Trả về True nếu LOG_JSON được set là 'true'
+    LOG_JSON = os.environ.get('LOG_JSON', 'false').lower() == 'true'
